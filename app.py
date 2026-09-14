@@ -1,6 +1,7 @@
 import json
 import os
-from datetime import datetime
+import re
+from datetime import date, datetime
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
@@ -11,6 +12,10 @@ load_dotenv()
 
 app = Flask(__name__)
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+FORTUNE_CACHE = {}
+DAEYUN_CACHE = {}
+COMPAT_CACHE = {}
 
 GAN_MAP = {
     "甲": "갑", "乙": "을", "丙": "병", "丁": "정", "戊": "무",
@@ -203,6 +208,17 @@ def wuxing_relations(element):
     }
 
 
+def get_today_ilju():
+    today = datetime.now()
+    bazi = Solar.fromYmdHms(today.year, today.month, today.day, 12, 0, 0).getLunar().getEightChar()
+    return {
+        "date": today.strftime("%Y-%m-%d"),
+        "gan": GAN_MAP[bazi.getDayGan()],
+        "zhi": ZHI_MAP[bazi.getDayZhi()],
+        "element": WUXING_MAP[bazi.getDayWuXing()[0]],
+    }
+
+
 def compute_saju(calendar_type, year, month, day, hour, minute, time_known, is_male):
     if calendar_type == "lunar":
         lunar = Lunar.fromYmdHms(year, month, day, hour, minute, 0)
@@ -308,7 +324,11 @@ def generate_fortunes(saju, gender):
     void_text = ", ".join(saju["void_pillars"]) if saju["void_pillars"] else "없음"
     relation_text = ", ".join(saju["zhi_relations"]) if saju["zhi_relations"] else "특이 관계 없음"
 
-    prompt = f"""당신은 사주명리학에 정통한 전문 상담가입니다. 아래는 실제로 계산된 사용자의 사주 원국 전체 데이터입니다.
+    today = get_today_ilju()
+    today_category = ten_god_between(dm, saju["day_master"], today["gan"], today["element"])
+    today_zhi_relation = describe_pair_relation(saju["zhi"]["day"], today["zhi"])
+
+    prompt = f"""당신은 사주명리학에 정통한 전문 상담가입니다. 아래는 실제로 계산된 사용자의 사주 원국 전체 데이터와, 오늘 날짜의 실제 일진(오늘의 干支) 데이터입니다.
 이 데이터에 있는 사실만 근거로 삼고, 없는 사실은 지어내지 마세요. 각 항목을 쓸 때 아래 데이터 중 최소 2가지 이상의 구체적 근거(십성 이름, 12운성, 신강/신약, 공망, 지지 관계 등)를 직접 언급하며 설명하세요. 전문 용어는 피하지 말고 사용하되, 처음 등장할 때 한 번은 괄호나 짧은 설명으로 뜻을 풀어주세요.
 
 [사주 원국]
@@ -323,26 +343,41 @@ def generate_fortunes(saju, gender):
 - 지지 관계(합·충·형·파·해): {relation_text}
 - 띠: {saju['animal']}띠, 성별: {gender}
 
+[오늘의 일진 — {today['date']}]
+- 오늘의 간지: {today['gan']}{today['zhi']}
+- 오늘의 일간이 사용자 일간 기준으로 갖는 십성: {today_category}
+- 오늘의 일지와 사용자 일지의 관계: {today_zhi_relation}
+
 이 데이터를 근거로 분석해서, 반드시 아래 JSON 형식으로만 답하세요. 각 항목은 3~4문장 분량으로 충분히 구체적으로 작성하세요.
 {{
-  "personality": "일간·십성 구성·신강신약·오행 분포를 종합한 성격/기질 분석. 장점과 주의할 성향을 균형있게 포함",
-  "fortune": "오늘의 전체 총운. 사주 원국(십성/공망/지지관계 등)과 오늘 하루를 연결지어 설명",
-  "love": "오늘의 연애운. 일지(배우자 자리)나 관련 십성을 근거로 설명",
-  "money": "오늘의 재물운. 재성(편재/정재) 관련 정보나 오행 분포를 근거로 설명",
-  "advice": "신강/신약과 용신, 부족한 오행을 균형 있게 보완하기 위한 구체적 조언 (색깔, 방향, 음식, 활동 등)"
+  "personality": "일간·십성 구성·신강신약·오행 분포를 종합한 성격/기질 분석. 오늘의 일진과는 무관하게 타고난 사주 원국만으로 판단. 장점과 주의할 성향을 균형있게 포함",
+  "fortune": "오늘({today['date']})의 전체 총운. 반드시 [오늘의 일진] 항목의 십성/지지관계를 직접 근거로 삼아 설명",
+  "love": "오늘의 연애운. 오늘의 일진과 사용자의 일지(배우자 자리)나 관련 십성을 근거로 설명",
+  "money": "오늘의 재물운. 오늘의 일진이 재성(편재/정재)과 관련되는지, 혹은 오행 분포를 근거로 설명",
+  "advice": "신강/신약과 용신, 부족한 오행을 균형 있게 보완하기 위한 구체적 조언 (색깔, 방향, 음식, 활동 등). 오늘의 일진과는 무관하게 원국 기준으로 판단"
 }}
 
 같은 근거를 여러 항목에서 반복해도 되지만, 문장이 뻔한 일반론에 머물지 않도록 이번 사주 고유의 구체적 조합(예: 특정 십성과 특정 지지 관계가 겹치는 지점)을 짚어서 설명하세요.
-신강/신약/중화 판정은 위에서 제시된 "{st['level']}" 결과를 모든 항목에서 정확히 그대로만 사용하고, 항목마다 다른 판정처럼 표현하지 마세요."""
+신강/신약/중화 판정은 위에서 제시된 "{st['level']}" 결과를 모든 항목에서 정확히 그대로만 사용하고, 항목마다 다른 판정처럼 표현하지 마세요.
+"fortune", "love", "money"는 오늘의 일진이 바뀌면 내용도 바뀌어야 하므로, 반드시 위 [오늘의 일진] 데이터를 구체적으로 인용하세요."""
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         max_tokens=1500,
-        temperature=0.9,
+        temperature=0.4,
         response_format={"type": "json_object"},
         messages=[{"role": "user", "content": prompt}],
     )
-    return json.loads(response.choices[0].message.content)
+    result = json.loads(response.choices[0].message.content)
+    return {k: fix_strength_wording(v, st["level"]) for k, v in result.items()}
+
+
+def fix_strength_wording(text, correct_level):
+    text = re.sub(r"신강\s*[/·,]?\s*신약", correct_level, text)
+    for wrong in ("신강", "신약", "중화"):
+        if wrong != correct_level:
+            text = text.replace(wrong, correct_level)
+    return text
 
 
 def generate_daeyun_readings(saju, gender):
@@ -378,7 +413,7 @@ def generate_daeyun_readings(saju, gender):
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         max_tokens=900,
-        temperature=1.0,
+        temperature=0.6,
         response_format={"type": "json_object"},
         messages=[{"role": "user", "content": prompt}],
     )
@@ -458,7 +493,7 @@ def generate_compatibility_reading(comp, saju_a, saju_b, name_a, name_b):
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         max_tokens=900,
-        temperature=0.9,
+        temperature=0.6,
         response_format={"type": "json_object"},
         messages=[{"role": "user", "content": prompt}],
     )
@@ -513,18 +548,29 @@ def analyze():
     except Exception:
         return jsonify({"error": "생년월일을 올바르게 입력해주세요."}), 400
 
-    try:
-        fortunes = generate_fortunes(saju, gender)
-    except Exception:
-        return jsonify({"error": "운세를 생성하지 못했어요. 잠시 후 다시 시도해주세요."}), 502
+    birth_key = (calendar_type, year, month, day, hour, minute, time_known, is_male)
 
-    try:
-        readings = generate_daeyun_readings(saju, gender)
-        for d in saju["da_yun"]:
-            d["reading"] = readings.get(d["age"], "")
-    except Exception:
-        for d in saju["da_yun"]:
-            d["reading"] = ""
+    fortune_key = birth_key + (date.today().isoformat(),)
+    if fortune_key in FORTUNE_CACHE:
+        fortunes = FORTUNE_CACHE[fortune_key]
+    else:
+        try:
+            fortunes = generate_fortunes(saju, gender)
+        except Exception:
+            return jsonify({"error": "운세를 생성하지 못했어요. 잠시 후 다시 시도해주세요."}), 502
+        FORTUNE_CACHE[fortune_key] = fortunes
+
+    if birth_key in DAEYUN_CACHE:
+        readings = DAEYUN_CACHE[birth_key]
+    else:
+        try:
+            readings = generate_daeyun_readings(saju, gender)
+        except Exception:
+            readings = {}
+        DAEYUN_CACHE[birth_key] = readings
+
+    for d in saju["da_yun"]:
+        d["reading"] = readings.get(d["age"], "")
 
     return jsonify({"saju": saju, "fortunes": fortunes})
 
@@ -551,10 +597,15 @@ def compatibility():
 
     comp = compute_compatibility(saju_a, saju_b)
 
-    try:
-        reading = generate_compatibility_reading(comp, saju_a, saju_b, name_a, name_b)
-    except Exception:
-        return jsonify({"error": "궁합 분석을 생성하지 못했어요. 잠시 후 다시 시도해주세요."}), 502
+    compat_key = (info_a, info_b, name_a, name_b)
+    if compat_key in COMPAT_CACHE:
+        reading = COMPAT_CACHE[compat_key]
+    else:
+        try:
+            reading = generate_compatibility_reading(comp, saju_a, saju_b, name_a, name_b)
+        except Exception:
+            return jsonify({"error": "궁합 분석을 생성하지 못했어요. 잠시 후 다시 시도해주세요."}), 502
+        COMPAT_CACHE[compat_key] = reading
 
     return jsonify({
         "saju_a": saju_a,
