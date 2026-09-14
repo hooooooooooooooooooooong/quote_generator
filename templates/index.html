@@ -63,10 +63,12 @@
     font-weight: normal;
   }
   .lunar-row {
+    display: flex;
     flex-direction: row;
     gap: 8px;
   }
-  .lunar-row select { flex: 1; }
+  .lunar-row select { flex: 1; min-width: 0; }
+  .lunar-row input[type="number"] { flex: 1.2; min-width: 0; }
   .solar-only, .lunar-only { display: flex; flex-direction: column; gap: 12px; }
   .hidden { display: none; }
   button {
@@ -257,15 +259,22 @@
       <div class="solar-only" id="solar-fields">
         <label>
           생년월일
-          <input type="date" id="birth_date">
+          <span class="lunar-row">
+            <input type="number" id="solar_year" placeholder="년 (예: 1996)">
+            <select id="solar_month"></select>
+            <select id="solar_day"></select>
+          </span>
         </label>
       </div>
 
       <div class="lunar-only hidden" id="lunar-fields">
-        <label class="lunar-row">
-          <input type="number" id="lunar_year" placeholder="년 (예: 1996)">
-          <select id="lunar_month"></select>
-          <select id="lunar_day"></select>
+        <label>
+          생년월일
+          <span class="lunar-row">
+            <input type="number" id="lunar_year" placeholder="년 (예: 1996)">
+            <select id="lunar_month"></select>
+            <select id="lunar_day"></select>
+          </span>
         </label>
         <label class="checkbox-row">
           <input type="checkbox" id="is_leap_month">
@@ -336,11 +345,17 @@
     const resultBox = document.getElementById("result");
     const solarFields = document.getElementById("solar-fields");
     const lunarFields = document.getElementById("lunar-fields");
+    const solarMonth = document.getElementById("solar_month");
+    const solarDay = document.getElementById("solar_day");
     const lunarMonth = document.getElementById("lunar_month");
     const lunarDay = document.getElementById("lunar_day");
 
     for (let m = 1; m <= 12; m++) {
+      solarMonth.innerHTML += `<option value="${m}">${m}월</option>`;
       lunarMonth.innerHTML += `<option value="${m}">${m}월</option>`;
+    }
+    for (let d = 1; d <= 31; d++) {
+      solarDay.innerHTML += `<option value="${d}">${d}일</option>`;
     }
     for (let d = 1; d <= 30; d++) {
       lunarDay.innerHTML += `<option value="${d}">${d}일</option>`;
@@ -380,7 +395,10 @@
         payload.lunar_day = lunarDay.value;
         payload.is_leap_month = document.getElementById("is_leap_month").checked;
       } else {
-        payload.birth_date = document.getElementById("birth_date").value;
+        const y = document.getElementById("solar_year").value;
+        const m = String(solarMonth.value).padStart(2, "0");
+        const d = String(solarDay.value).padStart(2, "0");
+        payload.birth_date = y ? `${y}-${m}-${d}` : "";
       }
 
       try {
