@@ -2,16 +2,18 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>오늘의 명언 / 운세</title>
+<title>사주로 보는 오늘의 운세</title>
 <style>
   body {
     font-family: 'Malgun Gothic', sans-serif;
     background: linear-gradient(135deg, #667eea, #764ba2);
-    height: 100vh;
+    min-height: 100vh;
     margin: 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
   }
   .card {
     background: white;
@@ -19,15 +21,54 @@
     border-radius: 20px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.3);
     text-align: center;
-    max-width: 400px;
+    max-width: 560px;
+    width: 100%;
+    box-sizing: border-box;
   }
-  h1 { color: #764ba2; }
-  #quote {
-    font-size: 20px;
+  h1 { color: #764ba2; font-size: 22px; }
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    text-align: left;
     margin: 20px 0;
-    min-height: 80px;
-    color: #333;
   }
+  label {
+    font-size: 14px;
+    color: #555;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  input, select {
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+  }
+  .checkbox-row {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+  .calendar-toggle {
+    flex-direction: row;
+    gap: 16px;
+    align-items: center;
+  }
+  .calendar-toggle span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: normal;
+  }
+  .lunar-row {
+    flex-direction: row;
+    gap: 8px;
+  }
+  .lunar-row select { flex: 1; }
+  .solar-only, .lunar-only { display: flex; flex-direction: column; gap: 12px; }
+  .hidden { display: none; }
   button {
     background: #764ba2;
     color: white;
@@ -38,20 +79,585 @@
     cursor: pointer;
   }
   button:hover { background: #667eea; }
+  button:disabled { background: #bbb; cursor: default; }
+  #result { margin-top: 24px; text-align: left; }
+  .fortune-item { margin-bottom: 14px; }
+  .fortune-item .label { font-weight: bold; color: #764ba2; margin-bottom: 4px; }
+  #error { color: #c0392b; margin-top: 12px; font-size: 14px; }
+
+  .report {
+    border: 1px solid #e4ddf0;
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .report-title {
+    font-size: 19px;
+    font-weight: bold;
+    color: #2c2c2c;
+    text-align: center;
+  }
+  .report-sub {
+    text-align: center;
+    color: #888;
+    font-size: 13px;
+    margin: 4px 0 14px;
+  }
+  .report hr {
+    border: none;
+    border-top: 1px solid #e4ddf0;
+    margin: 0 0 14px;
+  }
+  .table-scroll { overflow-x: auto; }
+  table.pillar-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: center;
+    font-size: 13px;
+    min-width: 320px;
+  }
+  table.pillar-table th {
+    background: #764ba2;
+    color: white;
+    padding: 8px 4px;
+    font-weight: normal;
+  }
+  table.pillar-table td {
+    padding: 10px 4px;
+    font-weight: bold;
+    color: #444;
+    border-bottom: 1px solid #eee;
+    white-space: nowrap;
+  }
+  .report-line {
+    font-size: 12.5px;
+    color: #555;
+    margin-top: 12px;
+    line-height: 1.6;
+    word-break: keep-all;
+  }
+  .dayun-wrap { margin-top: 16px; }
+  .dayun-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: #764ba2;
+    margin-bottom: 6px;
+  }
+  table.dayun-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: center;
+    font-size: 12.5px;
+    min-width: 480px;
+  }
+  table.dayun-table th {
+    color: #888;
+    font-weight: normal;
+    padding: 4px;
+  }
+  table.dayun-table td {
+    padding: 6px 4px;
+    font-weight: bold;
+    color: #764ba2;
+    background: #f5f3fa;
+    border-radius: 6px;
+  }
+  .dayun-readings { margin-top: 10px; }
+  .dayun-reading {
+    font-size: 12.5px;
+    color: #555;
+    line-height: 1.6;
+    padding: 6px 0;
+    border-bottom: 1px dashed #eee;
+  }
+  .dayun-reading:last-child { border-bottom: none; }
+  .dayun-reading strong { color: #764ba2; }
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin: 16px 0 4px;
+  }
+  .tab-btn {
+    flex: 1;
+    background: #eee;
+    color: #666;
+    padding: 10px;
+    border-radius: 12px;
+    font-size: 14px;
+  }
+  .tab-btn.active {
+    background: #764ba2;
+    color: white;
+  }
+  .person-box {
+    border: 1px solid #eee;
+    border-radius: 12px;
+    padding: 14px;
+  }
+  .person-box .person-title {
+    font-weight: bold;
+    color: #764ba2;
+    margin-bottom: 8px;
+  }
+  .score-wrap { text-align: center; margin-bottom: 16px; }
+  .score-num { font-size: 40px; font-weight: bold; color: #764ba2; }
+  .score-bar {
+    background: #eee;
+    border-radius: 10px;
+    height: 12px;
+    overflow: hidden;
+    margin: 8px 0;
+  }
+  .score-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #764ba2, #667eea);
+  }
+  .relation-tag {
+    display: inline-block;
+    background: #f5f3fa;
+    color: #764ba2;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12.5px;
+    font-weight: bold;
+    margin-top: 4px;
+  }
+  .compat-pair { display: flex; gap: 8px; margin-bottom: 16px; }
+  .compat-pair > div {
+    flex: 1;
+    background: #f5f3fa;
+    border-radius: 10px;
+    padding: 10px;
+    font-size: 12.5px;
+    text-align: center;
+  }
+  .compat-pair .who { font-weight: bold; color: #764ba2; margin-bottom: 4px; }
 </style>
 </head>
 <body>
   <div class="card">
-    <h1>🔮 오늘의 명언 / 운세</h1>
-    <p id="quote">버튼을 눌러 오늘의 메시지를 확인하세요!</p>
-    <button onclick="getQuote()">운세 보기</button>
+    <h1 id="page-title">🔮 사주로 보는 오늘의 운세</h1>
+
+    <div class="tabs">
+      <button type="button" class="tab-btn active" id="tab-solo">🔮 내 사주 보기</button>
+      <button type="button" class="tab-btn" id="tab-compat">💑 궁합 보기</button>
+    </div>
+
+    <form id="saju-form">
+      <label>
+        이름 (선택)
+        <input type="text" id="display_name" placeholder="예: 홍길동">
+      </label>
+      <label class="checkbox-row calendar-toggle">
+        <span><input type="radio" name="calendar_type" value="solar" checked> 양력</span>
+        <span><input type="radio" name="calendar_type" value="lunar"> 음력</span>
+      </label>
+
+      <div class="solar-only" id="solar-fields">
+        <label>
+          생년월일
+          <input type="date" id="birth_date">
+        </label>
+      </div>
+
+      <div class="lunar-only hidden" id="lunar-fields">
+        <label class="lunar-row">
+          <input type="number" id="lunar_year" placeholder="년 (예: 1996)">
+          <select id="lunar_month"></select>
+          <select id="lunar_day"></select>
+        </label>
+        <label class="checkbox-row">
+          <input type="checkbox" id="is_leap_month">
+          윤달이에요
+        </label>
+      </div>
+
+      <label>
+        태어난 시간
+        <input type="time" id="birth_time">
+      </label>
+      <label class="checkbox-row">
+        <input type="checkbox" id="time_unknown">
+        태어난 시간을 몰라요
+      </label>
+      <label>
+        성별
+        <select id="gender">
+          <option value="female">여성</option>
+          <option value="male">남성</option>
+        </select>
+      </label>
+      <button type="submit" id="submit-btn">내 사주로 오늘의 운세 보기</button>
+    </form>
+
+    <form id="compat-form" class="hidden">
+      <div class="person-box">
+        <div class="person-title">👤 사람 A</div>
+        <label>이름 (선택) <input type="text" class="c-name" placeholder="예: 홍길동"></label>
+        <label>생년월일 (양력) <input type="date" class="c-date" required></label>
+        <label>태어난 시간 <input type="time" class="c-time"></label>
+        <label class="checkbox-row"><input type="checkbox" class="c-time-unknown"> 태어난 시간을 몰라요</label>
+        <label>성별
+          <select class="c-gender">
+            <option value="female">여성</option>
+            <option value="male">남성</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="person-box" style="margin-top:12px;">
+        <div class="person-title">👤 사람 B</div>
+        <label>이름 (선택) <input type="text" class="c-name" placeholder="예: 김철수"></label>
+        <label>생년월일 (양력) <input type="date" class="c-date" required></label>
+        <label>태어난 시간 <input type="time" class="c-time"></label>
+        <label class="checkbox-row"><input type="checkbox" class="c-time-unknown"> 태어난 시간을 몰라요</label>
+        <label>성별
+          <select class="c-gender">
+            <option value="female">여성</option>
+            <option value="male">남성</option>
+          </select>
+        </label>
+      </div>
+
+      <button type="submit" id="compat-submit-btn" style="margin-top:12px;">두 사람 궁합 보기</button>
+    </form>
+
+    <div id="error"></div>
+    <div id="result"></div>
   </div>
 
   <script>
-    async function getQuote() {
-      const res = await fetch("/api/random");
-      const data = await res.json();
-      document.getElementById("quote").innerText = data.quote;
+    const form = document.getElementById("saju-form");
+    const timeInput = document.getElementById("birth_time");
+    const timeUnknown = document.getElementById("time_unknown");
+    const submitBtn = document.getElementById("submit-btn");
+    const errorBox = document.getElementById("error");
+    const resultBox = document.getElementById("result");
+    const solarFields = document.getElementById("solar-fields");
+    const lunarFields = document.getElementById("lunar-fields");
+    const lunarMonth = document.getElementById("lunar_month");
+    const lunarDay = document.getElementById("lunar_day");
+
+    for (let m = 1; m <= 12; m++) {
+      lunarMonth.innerHTML += `<option value="${m}">${m}월</option>`;
+    }
+    for (let d = 1; d <= 30; d++) {
+      lunarDay.innerHTML += `<option value="${d}">${d}일</option>`;
+    }
+
+    document.querySelectorAll('input[name="calendar_type"]').forEach(radio => {
+      radio.addEventListener("change", () => {
+        const isLunar = radio.value === "lunar" && radio.checked;
+        if (!radio.checked) return;
+        solarFields.classList.toggle("hidden", isLunar);
+        lunarFields.classList.toggle("hidden", !isLunar);
+      });
+    });
+
+    timeUnknown.addEventListener("change", () => {
+      timeInput.disabled = timeUnknown.checked;
+      if (timeUnknown.checked) timeInput.value = "";
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorBox.innerText = "";
+      resultBox.innerHTML = "";
+      submitBtn.disabled = true;
+      submitBtn.innerText = "분석 중...";
+
+      const calendarType = document.querySelector('input[name="calendar_type"]:checked').value;
+      const payload = {
+        calendar_type: calendarType,
+        birth_time: timeUnknown.checked ? null : timeInput.value,
+        gender: document.getElementById("gender").value,
+      };
+
+      if (calendarType === "lunar") {
+        payload.lunar_year = document.getElementById("lunar_year").value;
+        payload.lunar_month = lunarMonth.value;
+        payload.lunar_day = lunarDay.value;
+        payload.is_leap_month = document.getElementById("is_leap_month").checked;
+      } else {
+        payload.birth_date = document.getElementById("birth_date").value;
+      }
+
+      try {
+        const res = await fetch("/api/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          errorBox.innerText = data.error;
+          return;
+        }
+
+        renderResult(data);
+      } catch (err) {
+        errorBox.innerText = "문제가 발생했어요. 잠시 후 다시 시도해주세요.";
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = "내 사주로 오늘의 운세 보기";
+      }
+    });
+
+    const WUXING_ORDER = ["목", "화", "토", "금", "수"];
+    const WUXING_COLORS = { 목: "#4caf50", 화: "#e74c3c", 토: "#c99a3c", 금: "#95a5a6", 수: "#2980b9" };
+
+    function buildRadarChart(counts) {
+      const center = 100, maxR = 68;
+      const maxVal = Math.max(4, ...Object.values(counts));
+
+      const point = (i, val) => {
+        const angle = (-90 + i * 72) * Math.PI / 180;
+        const r = maxR * (val / maxVal);
+        return [center + r * Math.cos(angle), center + r * Math.sin(angle)];
+      };
+
+      const grid = [0.25, 0.5, 0.75, 1].map(frac => {
+        const pts = WUXING_ORDER.map((_, i) => point(i, maxVal * frac).join(",")).join(" ");
+        return `<polygon points="${pts}" fill="none" stroke="#e0e0e0" stroke-width="1"/>`;
+      }).join("");
+
+      const axes = WUXING_ORDER.map((el, i) => {
+        const [x, y] = point(i, maxVal);
+        const [lx, ly] = point(i, maxVal * 1.22);
+        return `<line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="#eee"/>
+          <text x="${lx}" y="${ly}" font-size="11" fill="${WUXING_COLORS[el]}" text-anchor="middle" font-weight="bold">${el} ${counts[el]}</text>`;
+      }).join("");
+
+      const dataPts = WUXING_ORDER.map((el, i) => point(i, counts[el]).join(",")).join(" ");
+      const dots = WUXING_ORDER.map((el, i) => {
+        const [x, y] = point(i, counts[el]);
+        return `<circle cx="${x}" cy="${y}" r="3.5" fill="${WUXING_COLORS[el]}"/>`;
+      }).join("");
+
+      return `<svg viewBox="0 0 200 200" width="100%" height="200" style="max-width:220px; display:block; margin:8px auto;">
+        ${grid}${axes}
+        <polygon points="${dataPts}" fill="rgba(118,75,162,0.35)" stroke="#764ba2" stroke-width="2"/>
+        ${dots}
+      </svg>`;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement("div");
+      div.innerText = str;
+      return div.innerHTML;
+    }
+
+    function buildReport(saju) {
+      const p = saju.pillars;
+      const hg = saju.hidden_gan;
+      const w = saju.wuxing_counts;
+
+      const name = escapeHtml(document.getElementById("display_name").value.trim() || "회원");
+      const timeText = timeUnknown.checked ? "시간 모름" : (timeInput.value || "시간 모름");
+      const sub = `${saju.solar_date} ${timeText} · ${saju.animal}띠`;
+
+      const cols = [["time", "시주"], ["day", "일주"], ["month", "월주"], ["year", "년주"]]
+        .filter(([key]) => p[key]);
+      const voidSet = new Set(saju.void_pillars || []);
+      const tg = saju.ten_gods;
+      const ts = saju.twelve_stages;
+
+      const ganRow = cols.map(([key]) => `<td style="font-weight:normal; color:#888; font-size:11px;">${tg[key].gan}</td>`).join("");
+      const headerHtml = cols.map(([, label]) => `<th>${label}</th>`).join("");
+      const cellHtml = cols.map(([key]) => `<td>${p[key]}${voidSet.has(key) ? ' <span style="color:#c99a3c;font-size:10px;">空亡</span>' : ""}</td>`).join("");
+      const zhiTgRow = cols.map(([key]) => `<td style="font-weight:normal; color:#888; font-size:11px;">${tg[key].zhi}</td>`).join("");
+      const stageRow = cols.map(([key]) => `<td style="font-weight:normal; color:#888; font-size:11px;">${ts[key]}</td>`).join("");
+
+      const minVal = Math.min(...Object.values(w));
+      const weakElements = WUXING_ORDER.filter(el => w[el] === minVal).join("·");
+
+      const wCountsText = WUXING_ORDER.map(el => `${el}${w[el]}`).join(" ");
+      const summaryLine = `일간 ${saju.day_master}(${saju.day_master_hanja}) · 오행 ${saju.day_master_wuxing}
+        &nbsp;|&nbsp; 오행 ${wCountsText} &nbsp;|&nbsp; 보완 오행: ${weakElements}`;
+
+      const st = saju.strength;
+      const strengthLine = `${st.level} (일간을 돕는 힘 ${st.ratio}%) · 간단 추정 용신: ${st.yongsin} <span style="color:#aaa;">(참고용 · 간이 계산)</span>`;
+
+      const hiddenGanLine = "지장간 · " + cols
+        .map(([key, label]) => `${label[0]} ${hg[key]}`)
+        .join(" &nbsp;|&nbsp; ");
+
+      const relations = saju.zhi_relations || [];
+      const relationsLine = relations.length
+        ? "지지 관계 · " + relations.join(" &nbsp;|&nbsp; ")
+        : "지지 관계 · 특이 관계 없음";
+
+      let dayunHtml = "";
+      if (saju.da_yun && saju.da_yun.length) {
+        const ageRow = saju.da_yun.map(d => `<th>${d.age}세</th>`).join("");
+        const gzRow = saju.da_yun.map(d => `<td>${d.ganzhi}</td>`).join("");
+        const readingRows = saju.da_yun
+          .filter(d => d.reading)
+          .map(d => `<div class="dayun-reading"><strong>${d.age}~${d.age + 9}세 (${d.ganzhi})</strong> ${d.reading}</div>`)
+          .join("");
+        dayunHtml = `
+          <div class="dayun-wrap">
+            <div class="dayun-title">대운 (10년 주기 흐름)</div>
+            <div class="table-scroll">
+              <table class="dayun-table">
+                <tr>${ageRow}</tr>
+                <tr>${gzRow}</tr>
+              </table>
+            </div>
+            ${readingRows ? `<div class="dayun-readings">${readingRows}</div>` : ""}
+          </div>`;
+      }
+
+      return `
+        <div class="report">
+          <div class="report-title">${name} 님의 사주 리포트</div>
+          <div class="report-sub">${sub}</div>
+          <hr>
+          <div class="table-scroll">
+            <table class="pillar-table">
+              <tr>${ganRow}</tr>
+              <tr>${headerHtml}</tr>
+              <tr>${cellHtml}</tr>
+              <tr>${zhiTgRow}</tr>
+              <tr>${stageRow}</tr>
+            </table>
+          </div>
+          <div class="report-line">${summaryLine}</div>
+          <div class="report-line">${strengthLine}</div>
+          <div class="report-line">${hiddenGanLine}</div>
+          <div class="report-line">${relationsLine}</div>
+          ${buildRadarChart(w)}
+          ${dayunHtml}
+        </div>`;
+    }
+
+    function renderResult(data) {
+      const f = data.fortunes;
+
+      resultBox.innerHTML = `
+        ${buildReport(data.saju)}
+        <div class="fortune-item"><div class="label">🧬 성격/기질</div><div>${f.personality}</div></div>
+        <div class="fortune-item"><div class="label">🔮 오늘의 총운</div><div>${f.fortune}</div></div>
+        <div class="fortune-item"><div class="label">💕 연애운</div><div>${f.love}</div></div>
+        <div class="fortune-item"><div class="label">💰 재물운</div><div>${f.money}</div></div>
+        <div class="fortune-item"><div class="label">⚖️ 오행 밸런스 조언</div><div>${f.advice}</div></div>
+      `;
+    }
+
+    // ---- 궁합 보기 ----
+    const pageTitle = document.getElementById("page-title");
+    const tabSolo = document.getElementById("tab-solo");
+    const tabCompat = document.getElementById("tab-compat");
+    const compatForm = document.getElementById("compat-form");
+    const compatSubmitBtn = document.getElementById("compat-submit-btn");
+
+    tabSolo.addEventListener("click", () => {
+      tabSolo.classList.add("active");
+      tabCompat.classList.remove("active");
+      form.classList.remove("hidden");
+      compatForm.classList.add("hidden");
+      pageTitle.innerText = "🔮 사주로 보는 오늘의 운세";
+      errorBox.innerText = "";
+      resultBox.innerHTML = "";
+    });
+
+    tabCompat.addEventListener("click", () => {
+      tabCompat.classList.add("active");
+      tabSolo.classList.remove("active");
+      compatForm.classList.remove("hidden");
+      form.classList.add("hidden");
+      pageTitle.innerText = "💑 궁합 보기";
+      errorBox.innerText = "";
+      resultBox.innerHTML = "";
+    });
+
+    document.querySelectorAll(".person-box").forEach(box => {
+      const timeInputEl = box.querySelector(".c-time");
+      const timeUnknownEl = box.querySelector(".c-time-unknown");
+      timeUnknownEl.addEventListener("change", () => {
+        timeInputEl.disabled = timeUnknownEl.checked;
+        if (timeUnknownEl.checked) timeInputEl.value = "";
+      });
+    });
+
+    function personPayload(box) {
+      const timeUnknownEl = box.querySelector(".c-time-unknown");
+      const timeInputEl = box.querySelector(".c-time");
+      return {
+        name: box.querySelector(".c-name").value.trim(),
+        calendar_type: "solar",
+        birth_date: box.querySelector(".c-date").value,
+        birth_time: timeUnknownEl.checked ? null : timeInputEl.value,
+        gender: box.querySelector(".c-gender").value,
+      };
+    }
+
+    compatForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorBox.innerText = "";
+      resultBox.innerHTML = "";
+      compatSubmitBtn.disabled = true;
+      compatSubmitBtn.innerText = "분석 중...";
+
+      const boxes = document.querySelectorAll(".person-box");
+      const payload = {
+        person_a: personPayload(boxes[0]),
+        person_b: personPayload(boxes[1]),
+      };
+
+      try {
+        const res = await fetch("/api/compatibility", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          errorBox.innerText = data.error;
+          return;
+        }
+
+        renderCompatResult(data);
+      } catch (err) {
+        errorBox.innerText = "문제가 발생했어요. 잠시 후 다시 시도해주세요.";
+      } finally {
+        compatSubmitBtn.disabled = false;
+        compatSubmitBtn.innerText = "두 사람 궁합 보기";
+      }
+    });
+
+    function renderCompatResult(data) {
+      const comp = data.compatibility;
+      const r = data.reading;
+      const nameA = escapeHtml(data.name_a);
+      const nameB = escapeHtml(data.name_b);
+
+      const wa = data.saju_a.wuxing_counts;
+      const wb = data.saju_b.wuxing_counts;
+      const waText = WUXING_ORDER.map(el => `${el}${wa[el]}`).join(" ");
+      const wbText = WUXING_ORDER.map(el => `${el}${wb[el]}`).join(" ");
+
+      resultBox.innerHTML = `
+        <div class="score-wrap">
+          <div class="score-num">${comp.score}점</div>
+          <div class="score-bar"><div class="score-bar-fill" style="width:${comp.score}%"></div></div>
+          <div class="relation-tag">${comp.day_master_a}(${data.saju_a.day_master_wuxing}) × ${comp.day_master_b}(${data.saju_b.day_master_wuxing}) · ${comp.relation} 관계</div>
+        </div>
+        <div class="compat-pair">
+          <div><div class="who">${nameA}</div>일간 ${data.saju_a.day_master}(${data.saju_a.day_master_wuxing}) · ${data.saju_a.strength.level}<br>${waText}</div>
+          <div><div class="who">${nameB}</div>일간 ${data.saju_b.day_master}(${data.saju_b.day_master_wuxing}) · ${data.saju_b.strength.level}<br>${wbText}</div>
+        </div>
+        <div class="report-line" style="margin-bottom:14px;">
+          십성 역할 · ${nameB}은(는) ${nameA}에게 <strong>${comp.b_as_seen_by_a}</strong>, ${nameA}은(는) ${nameB}에게 <strong>${comp.a_as_seen_by_b}</strong>
+          &nbsp;|&nbsp; 일지 관계 · ${comp.day_zhi_relation} &nbsp;|&nbsp; 년지 관계 · ${comp.year_zhi_relation}
+        </div>
+        <div class="fortune-item"><div class="label">💑 궁합 총평</div><div>${r.summary}</div></div>
+        <div class="fortune-item"><div class="label">✨ 잘 맞는 점</div><div>${r.strengths}</div></div>
+        <div class="fortune-item"><div class="label">⚠️ 주의할 점</div><div>${r.cautions}</div></div>
+      `;
     }
   </script>
 </body>
