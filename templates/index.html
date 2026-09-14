@@ -424,6 +424,7 @@
     });
 
     const WUXING_ORDER = ["목", "화", "토", "금", "수"];
+    const PILLAR_LABEL_KR = { year: "년주", month: "월주", day: "일주", time: "시주" };
     const WUXING_COLORS = { 목: "#4caf50", 화: "#e74c3c", 토: "#c99a3c", 금: "#95a5a6", 수: "#2980b9" };
 
     function buildRadarChart(counts) {
@@ -507,6 +508,12 @@
         ? "지지 관계 · " + relations.join(" &nbsp;|&nbsp; ")
         : "지지 관계 · 특이 관계 없음";
 
+      const sinsal = saju.sinsal || {};
+      const sinsalKeys = Object.keys(sinsal);
+      const sinsalLine = sinsalKeys.length
+        ? "신살 · " + sinsalKeys.map(name => `${name}(${sinsal[name].map(k => PILLAR_LABEL_KR[k]).join("·")})`).join(" &nbsp;|&nbsp; ")
+        : "신살 · 해당 없음";
+
       let dayunHtml = "";
       if (saju.da_yun && saju.da_yun.length) {
         const ageRow = saju.da_yun.map(d => `<th>${d.age}세</th>`).join("");
@@ -546,6 +553,7 @@
           <div class="report-line">${strengthLine}</div>
           <div class="report-line">${hiddenGanLine}</div>
           <div class="report-line">${relationsLine}</div>
+          <div class="report-line">${sinsalLine}</div>
           ${buildRadarChart(w)}
           ${dayunHtml}
         </div>`;
@@ -553,11 +561,16 @@
 
     function renderResult(data) {
       const f = data.fortunes;
+      const yf = data.saju.year_fortune;
+      const yearlyHtml = yf && yf.text
+        ? `<div class="fortune-item"><div class="label">🎊 ${yf.year}년 올해의 운세</div><div>${yf.text}</div></div>`
+        : "";
 
       resultBox.innerHTML = `
         ${buildReport(data.saju)}
         <div class="fortune-item"><div class="label">🧬 성격/기질</div><div>${f.personality}</div></div>
         <div class="fortune-item"><div class="label">🔮 오늘의 총운</div><div>${f.fortune}</div></div>
+        ${yearlyHtml}
         <div class="fortune-item"><div class="label">💕 연애운</div><div>${f.love}</div></div>
         <div class="fortune-item"><div class="label">💰 재물운</div><div>${f.money}</div></div>
         <div class="fortune-item"><div class="label">⚖️ 오행 밸런스 조언</div><div>${f.advice}</div></div>

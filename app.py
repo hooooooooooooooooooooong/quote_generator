@@ -16,6 +16,7 @@ client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 FORTUNE_CACHE = {}
 DAEYUN_CACHE = {}
 COMPAT_CACHE = {}
+YEARLY_CACHE = {}
 
 GAN_MAP = {
     "甲": "갑", "乙": "을", "丙": "병", "丁": "정", "戊": "무",
@@ -84,6 +85,20 @@ SAMHYEONG_GROUPS = [
     (frozenset({"축", "술", "미"}), "축술미 삼형"),
 ]
 
+SINSAL_GROUP_TABLE = {
+    frozenset({"인", "오", "술"}): {"역마": "신", "도화": "묘", "화개": "술"},
+    frozenset({"신", "자", "진"}): {"역마": "인", "도화": "유", "화개": "진"},
+    frozenset({"사", "유", "축"}): {"역마": "해", "도화": "오", "화개": "축"},
+    frozenset({"해", "묘", "미"}): {"역마": "사", "도화": "자", "화개": "미"},
+}
+GUIIN_TABLE = {
+    "갑": {"축", "미"}, "무": {"축", "미"}, "경": {"축", "미"},
+    "을": {"자", "신"}, "기": {"자", "신"},
+    "병": {"해", "유"}, "정": {"해", "유"},
+    "임": {"묘", "사"}, "계": {"묘", "사"},
+    "신": {"오", "인"},
+}
+
 
 def analyze_zhi_relations(zhi_dict):
     items = list(zhi_dict.items())
@@ -103,7 +118,7 @@ def analyze_zhi_relations(zhi_dict):
             if pair in PA:
                 results.append(f"{label} {z1}{z2} 파")
             if pair in HAE:
-                results.append(f"{label} {z1}{z2} 해")
+                results.append(f"{label} {z1}{z2} 해(害, 육해)")
             if pair == SANGHYEONG:
                 results.append(f"{label} {z1}{z2} 상형")
             if z1 == z2 and z1 in JAHYEONG_ZHI:
@@ -156,7 +171,7 @@ def describe_pair_relation(z1, z2):
     if pair in PA:
         return f"{z1}{z2} 파"
     if pair in HAE:
-        return f"{z1}{z2} 해"
+        return f"{z1}{z2} 해(害, 육해)"
     if pair == SANGHYEONG:
         return f"{z1}{z2} 상형"
     return "특이 관계 없음"
@@ -206,6 +221,36 @@ def wuxing_relations(element):
         "controls": CONTROL_ORDER[(ci + 1) % 5],
         "controlled_by": CONTROL_ORDER[(ci - 1) % 5],
     }
+
+
+def compute_sinsal(zhi_dict, year_zhi, day_gan):
+    result = {"역마": [], "도화": [], "화개": [], "천을귀인": []}
+
+    for group, table in SINSAL_GROUP_TABLE.items():
+        if year_zhi in group:
+            for name, target_zhi in table.items():
+                result[name] = [key for key, z in zhi_dict.items() if z == target_zhi]
+            break
+
+    guiin_targets = GUIIN_TABLE.get(day_gan, set())
+    result["천을귀인"] = [key for key, z in zhi_dict.items() if z in guiin_targets]
+
+    return {k: v for k, v in result.items() if v}
+
+
+def get_year_ganzhi(target_year):
+    bazi = Solar.fromYmdHms(target_year, 7, 1, 12, 0, 0).getLunar().getEightChar()
+    gan_kr = GAN_MAP[bazi.getYearGan()]
+    zhi_kr = ZHI_MAP[bazi.getYearZhi()]
+    return {"year": target_year, "gan": gan_kr, "zhi": zhi_kr, "element": GAN_ELEMENT[gan_kr]}
+
+
+def compute_year_relation(saju, target_year=None):
+    year_gz = get_year_ganzhi(target_year or datetime.now().year)
+    dm = saju["day_master_wuxing"]
+    category = ten_god_between(dm, saju["day_master"], year_gz["gan"], year_gz["element"])
+    zhi_relation = describe_pair_relation(saju["zhi"]["day"], year_gz["zhi"])
+    return {**year_gz, "category": category, "zhi_relation": zhi_relation}
 
 
 def get_today_ilju():
@@ -294,6 +339,7 @@ def compute_saju(calendar_type, year, month, day, hour, minute, time_known, is_m
         "void_pillars": void_pillars,
         "zhi_relations": analyze_zhi_relations(zhi),
         "zhi": zhi,
+        "sinsal": compute_sinsal(zhi, zhi["year"], GAN_MAP[bazi.getDayGan()]),
     }
     saju["strength"] = estimate_strength(saju)
     return saju
@@ -328,8 +374,15 @@ def generate_fortunes(saju, gender):
     today_category = ten_god_between(dm, saju["day_master"], today["gan"], today["element"])
     today_zhi_relation = describe_pair_relation(saju["zhi"]["day"], today["zhi"])
 
+    if saju["sinsal"]:
+        sinsal_text = ", ".join(
+            f"{name}({'·'.join(PILLAR_LABELS[k] for k in keys)})" for name, keys in saju["sinsal"].items()
+        )
+    else:
+        sinsal_text = "해당 없음"
+
     prompt = f"""당신은 사주명리학에 정통한 전문 상담가입니다. 아래는 실제로 계산된 사용자의 사주 원국 전체 데이터와, 오늘 날짜의 실제 일진(오늘의 干支) 데이터입니다.
-이 데이터에 있는 사실만 근거로 삼고, 없는 사실은 지어내지 마세요. 각 항목을 쓸 때 아래 데이터 중 최소 2가지 이상의 구체적 근거(십성 이름, 12운성, 신강/신약, 공망, 지지 관계 등)를 직접 언급하며 설명하세요. 전문 용어는 피하지 말고 사용하되, 처음 등장할 때 한 번은 괄호나 짧은 설명으로 뜻을 풀어주세요.
+이 데이터에 있는 사실만 근거로 삼고, 없는 사실은 지어내지 마세요. 각 항목을 쓸 때 아래 데이터 중 최소 2가지 이상의 구체적 근거(십성 이름, 12운성, 신강/신약, 공망, 지지 관계, 신살 등)를 직접 언급하며 설명하세요. 전문 용어는 피하지 말고 사용하되, 처음 등장할 때 한 번은 괄호나 짧은 설명으로 뜻을 풀어주세요.
 
 [사주 원국]
 {pillar_block}
@@ -341,6 +394,7 @@ def generate_fortunes(saju, gender):
 - 신강/신약 판정: {st['level']} (일간을 돕는 오행 비율 {st['ratio']}%), 간단 추정 용신: {st['yongsin']}
 - 공망(空亡, 기운이 비어있다고 보는 자리)에 해당하는 주: {void_text}
 - 지지 관계(합·충·형·파·해): {relation_text}
+- 신살(神殺): {sinsal_text} (역마=이동/변화, 도화=매력/인기, 화개=예술·종교적 감수성, 천을귀인=귀인의 도움)
 - 띠: {saju['animal']}띠, 성별: {gender}
 
 [오늘의 일진 — {today['date']}]
@@ -350,15 +404,16 @@ def generate_fortunes(saju, gender):
 
 이 데이터를 근거로 분석해서, 반드시 아래 JSON 형식으로만 답하세요. 각 항목은 3~4문장 분량으로 충분히 구체적으로 작성하세요.
 {{
-  "personality": "일간·십성 구성·신강신약·오행 분포를 종합한 성격/기질 분석. 오늘의 일진과는 무관하게 타고난 사주 원국만으로 판단. 장점과 주의할 성향을 균형있게 포함",
+  "personality": "일간·십성 구성·신강신약·오행 분포·신살을 종합한 성격/기질 분석. 신살이 '해당 없음'이면 언급하지 말 것. 오늘의 일진과는 무관하게 타고난 사주 원국만으로 판단. 장점과 주의할 성향을 균형있게 포함",
   "fortune": "오늘({today['date']})의 전체 총운. 반드시 [오늘의 일진] 항목의 십성/지지관계를 직접 근거로 삼아 설명",
-  "love": "오늘의 연애운. 오늘의 일진과 사용자의 일지(배우자 자리)나 관련 십성을 근거로 설명",
+  "love": "오늘의 연애운. 오늘의 일진과 사용자의 일지(배우자 자리)나 관련 십성을 근거로 설명. 도화살이 있다면 자연스럽게 반영",
   "money": "오늘의 재물운. 오늘의 일진이 재성(편재/정재)과 관련되는지, 혹은 오행 분포를 근거로 설명",
   "advice": "신강/신약과 용신, 부족한 오행을 균형 있게 보완하기 위한 구체적 조언 (색깔, 방향, 음식, 활동 등). 오늘의 일진과는 무관하게 원국 기준으로 판단"
 }}
 
 같은 근거를 여러 항목에서 반복해도 되지만, 문장이 뻔한 일반론에 머물지 않도록 이번 사주 고유의 구체적 조합(예: 특정 십성과 특정 지지 관계가 겹치는 지점)을 짚어서 설명하세요.
 신강/신약/중화 판정은 위에서 제시된 "{st['level']}" 결과를 모든 항목에서 정확히 그대로만 사용하고, 항목마다 다른 판정처럼 표현하지 마세요.
+신살이 '해당 없음'인데 신살이 있는 것처럼 지어내지 마세요.
 "fortune", "love", "money"는 오늘의 일진이 바뀌면 내용도 바뀌어야 하므로, 반드시 위 [오늘의 일진] 데이터를 구체적으로 인용하세요."""
 
     response = client.chat.completions.create(
@@ -378,6 +433,33 @@ def fix_strength_wording(text, correct_level):
         if wrong != correct_level:
             text = text.replace(wrong, correct_level)
     return text
+
+
+def generate_yearly_fortune(saju, gender, year_info):
+    dm = saju["day_master_wuxing"]
+    prompt = f"""당신은 사주명리학에 능통한 전문 상담가입니다.
+아래는 실제로 계산된 사용자의 사주와, {year_info['year']}년 세운(올해의 干支) 데이터입니다. 이 데이터만 근거로 삼으세요.
+
+- 일간: {saju['day_master']}({dm}), 신강/신약: {saju['strength']['level']}
+- {year_info['year']}년 세운 간지: {year_info['gan']}{year_info['zhi']}
+- 이 해의 천간이 일간 기준으로 갖는 십성: {year_info['category']}
+- 이 해의 지지와 사용자 일지의 관계: {year_info['zhi_relation']}
+- 성별: {gender}
+
+이 정보를 근거로 {year_info['year']}년 한 해의 전체적인 흐름을 3~4문장으로 설명하세요. 세운의 십성과 지지 관계를 반드시 구체적으로 인용하세요.
+반드시 아래 JSON 형식으로만 답하세요.
+{{"yearly": "..."}}
+전문 용어는 피하지 말되 처음 나올 때 짧게 풀어 설명하고, 일반론에 머물지 말고 이 사주 고유의 조합을 짚어 설명하세요."""
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        max_tokens=500,
+        temperature=0.4,
+        response_format={"type": "json_object"},
+        messages=[{"role": "user", "content": prompt}],
+    )
+    result = json.loads(response.choices[0].message.content)
+    return fix_strength_wording(result.get("yearly", ""), saju["strength"]["level"])
 
 
 def generate_daeyun_readings(saju, gender):
@@ -571,6 +653,19 @@ def analyze():
 
     for d in saju["da_yun"]:
         d["reading"] = readings.get(d["age"], "")
+
+    current_year = datetime.now().year
+    year_key = birth_key + (current_year,)
+    year_info = compute_year_relation(saju, current_year)
+    if year_key in YEARLY_CACHE:
+        year_info["text"] = YEARLY_CACHE[year_key]
+    else:
+        try:
+            year_info["text"] = generate_yearly_fortune(saju, gender, year_info)
+        except Exception:
+            year_info["text"] = ""
+        YEARLY_CACHE[year_key] = year_info["text"]
+    saju["year_fortune"] = year_info
 
     return jsonify({"saju": saju, "fortunes": fortunes})
 
