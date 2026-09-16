@@ -73,6 +73,24 @@ generate_fortunes() / generate_yearly_fortune() / generate_daeyun_readings()
 
 핵심 설계 원칙: **"계산이 필요한 부분(사실)은 코드가 계산하고, AI는 그 계산 결과를 사람이 읽기 좋은 글로 바꾸는 역할만 한다."** 이렇게 역할을 나눈 이유는 아래 5번 항목에서 자세히 설명합니다.
 
+### 어디까지가 "계산"이고 어디부터가 "AI"인가
+
+주요 기능 항목들이 실제로 코드 어디에서 계산되는지 정리하면 다음과 같습니다. `lunar-python`(계산 라이브러리) 기반 항목은 **인터넷 연결 없이도 100% 결정론적으로 계산**되며, OpenAI API는 전혀 관여하지 않습니다.
+
+| 기능 | 코드 위치 | 계산 방식 |
+|---|---|---|
+| 사주팔자 | `compute_saju()`의 `pillars` | `bazi.getYear()` 등 — `lunar-python` 계산 |
+| 십성 | `compute_saju()`의 `ten_gods` | `bazi.getYearShiShenGan()` 등 — `lunar-python` 계산 |
+| 12운성 | `compute_saju()`의 `twelve_stages` | `bazi.getYearDiShi()` 등 — `lunar-python` 계산 |
+| 공망 | `compute_saju()`의 `void_pillars` | `bazi.getDayXunKong()` — `lunar-python` 계산 |
+| 대운 | `compute_saju()`의 `da_yun` | `bazi.getYun()` — `lunar-python` 계산 |
+| 지지 관계(합충형파해) | `analyze_zhi_relations()` | 직접 구현한 순수 파이썬 함수 (육합·충·파·해 조견표를 코드에 정의해 판정) |
+| 신살 | `compute_sinsal()` | 직접 구현한 함수 (역마·도화·화개·천을귀인 조견표) |
+| 신강/신약 | `estimate_strength()` | 직접 구현한 함수 (오행 비율 계산) |
+| 성격/오늘·올해 운세/대운 해설/궁합 총평 등 **문장** | `generate_fortunes()`, `generate_yearly_fortune()`, `generate_daeyun_readings()`, `generate_compatibility_reading()` | 위에서 계산된 값을 프롬프트에 근거로 담아 **OpenAI API 호출** |
+
+즉 "사주가 무엇인지"는 계산기처럼 결정론적으로 나오고, "그게 무슨 의미인지"만 AI가 문장으로 풀어씁니다.
+
 ## 5. 개발하면서 겪은 문제와 해결 과정
 
 ### 문제 1 — "오늘의 운세"인데 새로고침할 때마다 결과가 달랐다
