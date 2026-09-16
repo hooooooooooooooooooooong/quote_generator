@@ -12,9 +12,16 @@
 
 | 단계 | 내용 |
 |---|---|
-| 1단계 | 고정 문구 10개 중 랜덤 출력 |
-| 2단계 | AI가 매번 새 문구를 생성 (단, 근거 없이 즉석에서 작성) |
-| 3단계 | **실제 사주 계산** 결과를 근거로 AI가 작성 (지금 방식) |
+| 1단계 | 고정 문구 10개 중 랜덤 출력 |→ "이건 아니다" 싶어서 전부 삭제
+| 2단계 | AI가 매번 새 문구를 생성 |OpenAI API로 교체해서 AI가 매번 새로 생성
+| 3단계 | lunar-python으로 **실제 사주 계산** 결과를 근거로 AI가 작성 (지금 방식) |
+더 정교한 계산(십성/신살 등)을 위해 무료 키를 발급받아 시도→ 무료 티어가 고정 샘플 5개 생년월일에만 응답하고 실제 사용자가 입력하는 임의의 생년월일은 다 거부하는 걸 발견→ lunar-python이라는 무료 오픈소스 파이썬 라이브러리를 써서 직접 계산 lunar-python: 생년월일을 실제 사주팔자로 변환해주는 계산 라이브러리 
+할 수 있는 것들:
+1. 양력 ↔ 음력 날짜 변환
+2. 생년월일시를 입력하면 사주팔자(육십갑자: 년주·월주·일주·시주) 계산
+3. 오행, 십성, 12운성, 대운, 공망 같은 명리학 개념까지 계산
+실제로 SAZU라는 유료 만세력 API의 계산 결과와 대조해봤는데 100% 일치할 정도로 정확
+인터넷 연결 없이 로컬에서 계산 가능 — API 호출 비용도 없고 빠름
 | 4단계 | 오늘의 운세 → 사주 리포트 + 오늘의 운세 + 올해의 운세 + 궁합으로 확장 |
 
 ## 2. 주요 기능
@@ -44,11 +51,12 @@
 
 | 영역 | 사용 기술 |
 |---|---|
-| 백엔드 | Python, Flask |
-| 사주 계산 | [`lunar-python`](https://pypi.org/project/lunar-python/) — 순수 파이썬 만세력/사주팔자 라이브러리 |
+| 백엔드 | Python, Flask(인터넷 주소와 파이썬 함수를 연결해주는" 도구 @app.route)
+1. 브라우저에서 127.0.0.1:5000 접속할 때,2. "내 사주로 오늘의 운세 보기" 버튼 클릭할 때,3. "두 사람 궁합 보기" 버튼 클릭할 때|	
+| 사주 계산 | [`lunar-python`](https://pypi.org/project/lunar-python/) |
 | AI 텍스트 생성 | OpenAI API (`gpt-4o-mini`, JSON mode) |
-| 프론트엔드 | 순수 HTML/CSS/JavaScript (프레임워크 없음), SVG로 레이더 차트 직접 구현 |
-| 환경 설정 | `python-dotenv` (`.env`로 API 키 관리) |
+| 프론트엔드 | 순수 HTML/CSS/JavaScript (프레임워크 없음), SVG로 레이더 차트 직접 구현 > 다 기본적인걸로 만듦|
+| 환경 설정 | `python-dotenv` > (`.env`에 API 키 저장) 불러오는 라이브러리|
 
 ## 4. 작동 구조 (아키텍처)
 
@@ -82,15 +90,21 @@ generate_fortunes() / generate_yearly_fortune() / generate_daeyun_readings()
 
 | 기능 | 코드 위치 | 계산 방식 |
 |---|---|---|
+`lunar-python` 계산
 | 사주팔자 | `compute_saju()`의 `pillars` | `bazi.getYear()` 등 — `lunar-python` 계산 |
 | 십성 | `compute_saju()`의 `ten_gods` | `bazi.getYearShiShenGan()` 등 — `lunar-python` 계산 |
 | 12운성 | `compute_saju()`의 `twelve_stages` | `bazi.getYearDiShi()` 등 — `lunar-python` 계산 |
 | 공망 | `compute_saju()`의 `void_pillars` | `bazi.getDayXunKong()` — `lunar-python` 계산 |
 | 대운 | `compute_saju()`의 `da_yun` | `bazi.getYun()` — `lunar-python` 계산 |
+
+밑에꺼는  "달력 계산"의 영역 즉, lunar-python이 못해줌
+그래서 밑에 이 세 개는 명리학 교과서에 나오는 정식 조견표를 직접 코드에 옮겨 적어서 판정하는 함수를 사용했고,  이미 SAZU라는 유료 서비스 결과랑 대조해서 검증도 끝냄.
 | 지지 관계(합충형파해) | `analyze_zhi_relations()` | 직접 구현한 순수 파이썬 함수 (육합·충·파·해 조견표를 코드에 정의해 판정) |
 | 신살 | `compute_sinsal()` | 직접 구현한 함수 (역마·도화·화개·천을귀인 조견표) |
 | 신강/신약 | `estimate_strength()` | 직접 구현한 함수 (오행 비율 계산) |
-| 성격/오늘·올해 운세/대운 해설/궁합 총평 등 **문장** | `generate_fortunes()`, `generate_yearly_fortune()`, `generate_daeyun_readings()`, `generate_compatibility_reading()` | 위에서 계산된 값을 프롬프트에 근거로 담아 **OpenAI API 호출** |
+
+위에서 계산된 값을 프롬프트에 근거로 담아 **OpenAI API 호출**
+| 성격/오늘·올해 운세/대운 해설/궁합 총평 등 **문장** | `generate_fortunes()`, `generate_yearly_fortune()`, `generate_daeyun_readings()`, `generate_compatibility_reading()`  |
 
 즉 "사주가 무엇인지"는 계산기처럼 결정론적으로 나오고, "그게 무슨 의미인지"만 AI가 문장으로 풀어씁니다.
 
